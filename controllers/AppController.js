@@ -3,9 +3,9 @@ import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
 class AppController {
-  getStats(req, res) {
-    const users = dbClient.nbUsers();
-    const files = dbClient.nbFiles();
+  async getStats(req, res) {
+    const users = await dbClient.nbUsers();
+    const files = await dbClient.nbFiles();
     return res.json({ users, files });
   }
 
