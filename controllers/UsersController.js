@@ -1,6 +1,8 @@
 /* eslint-disable class-methods-use-this */
 import sha1 from 'sha1';
+import { ObjectID } from 'mongodb';
 import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
 class UsersController {
   static async postNew(req, res) {
@@ -25,6 +27,18 @@ class UsersController {
     const newUser = await usersCollection.insertOne(userObj);
     const newUserObj = newUser.ops[0];
     return res.status(201).json({ id: newUserObj._id, email: newUserObj.email });
+  }
+
+  static async getMe(req, res) {
+    const token = req.headers['x-token'];
+    const userId = await redisClient.get(`auth_${token}`);
+    const db = dbClient._mongoClient.db(dbClient._dbName);
+    const usersCollection = db.collection('users');
+    const user = await usersCollection.findOne({ _id: new ObjectID(userId) });
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    return res.json({ email: user.email, id: user._id });
   }
 }
 
