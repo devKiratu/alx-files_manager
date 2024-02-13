@@ -44,7 +44,6 @@ class DBClient {
       });
       return file;
     } catch (error) {
-      console.error(`${error}`);
       return null;
     }
   }
