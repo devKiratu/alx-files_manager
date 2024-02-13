@@ -71,6 +71,28 @@ class DBClient {
     ]).toArray();
     return files;
   }
+
+  async publishFile(fileId, userId) {
+    const db = this._mongoClient.db(this._dbName);
+    const filesCollection = db.collection('files');
+    const updatedDocument = await filesCollection.findOneAndUpdate(
+      { _id: new ObjectID(fileId), userId: new ObjectID(userId) },
+      { $set: { isPublic: true } },
+      { returnOriginal: false },
+    );
+    return updatedDocument.value;
+  }
+
+  async unpublishFile(fileId, userId) {
+    const db = this._mongoClient.db(this._dbName);
+    const filesCollection = db.collection('files');
+    const updatedDocument = await filesCollection.findOneAndUpdate(
+      { _id: new ObjectID(fileId), userId: new ObjectID(userId) },
+      { $set: { isPublic: false } },
+      { returnOriginal: false },
+    );
+    return updatedDocument.value;
+  }
 }
 
 const dbClient = new DBClient();
