@@ -1,4 +1,4 @@
-import MongoClient from 'mongodb/lib/mongo_client';
+import { MongoClient, ObjectID } from 'mongodb';
 
 class DBClient {
   constructor() {
@@ -33,6 +33,44 @@ class DBClient {
     const filesCollection = db.collection('files');
     const docs = await filesCollection.find({}).toArray();
     return docs.length;
+  }
+
+  async getFile(fileId, userId) {
+    try {
+      const db = this._mongoClient.db(this._dbName);
+      const filesCollection = db.collection('files');
+      const file = await filesCollection.findOne({
+        _id: new ObjectID(fileId), userId: new ObjectID(userId),
+      });
+      return file;
+    } catch (error) {
+      console.error(`${error}`);
+      return null;
+    }
+  }
+
+  async getAllFiles(parentId, page) {
+    const currentPage = page ? parseInt(page, 10) : 0;
+    const maxPages = 20;
+    const db = this._mongoClient.db(this._dbName);
+    const filesCollection = db.collection('files');
+    if (!parentId) {
+      const files = await filesCollection.aggregate([
+        { $skip: currentPage * maxPages },
+        { $limit: maxPages },
+        { $addFields: { id: '$_id' } },
+        { $project: { _id: 0 } },
+      ]).toArray();
+      return files;
+    }
+    const files = await filesCollection.aggregate([
+      { $match: { parentId } },
+      { $skip: currentPage * maxPages },
+      { $limit: maxPages },
+      { $addFields: { id: '$_id' } },
+      { $project: { _id: 0 } },
+    ]).toArray();
+    return files;
   }
 }
 

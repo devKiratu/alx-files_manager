@@ -27,7 +27,7 @@ class FilesController {
 
     if ('parentId' in req.body) {
       const parentFile = await filesCollection.findOne({
-        parentId: new ObjectID(req.body.parentId),
+        _id: new ObjectID(req.body.parentId),
       });
       if (!parentFile) {
         return res.status(400).json({ error: 'Parent not found' });
@@ -55,16 +55,9 @@ class FilesController {
     }
     const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
     // create folder if it doesn't exist
-    fs.access(folderPath, fs.constants.F_OK, (err) => {
-      if (err) {
-        console.err('FILE ERROR ', err);
-        fs.mkdir(folderPath, (err) => {
-          if (err) {
-            console.error(err);
-          }
-        });
-      }
-    });
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath);
+    }
     const data = Buffer.from(req.body.data, 'base64');
     const fileName = uuid.v4();
     const localPath = `${folderPath}/${fileName}`;
@@ -89,6 +82,36 @@ class FilesController {
     return res.status(201).json({
       id: _id, userId: usrId, name, type, isPublic, parentId,
     });
+  }
+
+  static async getShow(req, res) {
+    const fileId = req.params.id;
+    const token = req.headers['x-token'];
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const file = await dbClient.getFile(fileId, userId);
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const {
+      userId: usrId, name, type, parentId, isPublic, _id,
+    } = file;
+    return res.json({
+      id: _id, userId: usrId, name, type, isPublic, parentId,
+    });
+  }
+
+  static async getIndex(req, res) {
+    const token = req.headers['x-token'];
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { parentId, page } = req.query;
+    const files = await dbClient.getAllFiles(parentId, page);
+    return res.json(files);
   }
 }
 
