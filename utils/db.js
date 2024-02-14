@@ -48,6 +48,19 @@ class DBClient {
     }
   }
 
+  async getFileById(fileId) {
+    try {
+      const db = this._mongoClient.db(this._dbName);
+      const filesCollection = db.collection('files');
+      const file = await filesCollection.findOne({
+        _id: new ObjectID(fileId),
+      });
+      return file;
+    } catch (error) {
+      return null;
+    }
+  }
+
   async getAllFiles(parentId, page) {
     const currentPage = page ? parseInt(page, 10) : 0;
     const maxPages = 20;
