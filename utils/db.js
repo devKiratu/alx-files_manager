@@ -35,6 +35,17 @@ class DBClient {
     return docs.length;
   }
 
+  async getUserById(userId) {
+    try {
+      const db = this._mongoClient.db(this._dbName);
+      const usersCollection = db.collection('users');
+      const user = await usersCollection.findOne({ _id: new ObjectID(userId) });
+      return user;
+    } catch (error) {
+      return null;
+    }
+  }
+
   async getFile(fileId, userId) {
     try {
       const db = this._mongoClient.db(this._dbName);

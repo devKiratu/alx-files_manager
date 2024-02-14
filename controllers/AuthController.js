@@ -29,6 +29,10 @@ class AuthController {
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+    const user = await dbClient.getUserById(userId);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     await redisClient.del(`auth_${token}`);
     return res.status(204).send();
   }
