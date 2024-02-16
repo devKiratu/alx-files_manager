@@ -1,8 +1,11 @@
 /* eslint-disable class-methods-use-this */
 import sha1 from 'sha1';
 import { ObjectID } from 'mongodb';
+import Queue from 'bull/lib/queue';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
+
+const userQueue = new Queue('userQueue');
 
 class UsersController {
   static async postNew(req, res) {
@@ -26,6 +29,9 @@ class UsersController {
     };
     const newUser = await usersCollection.insertOne(userObj);
     const newUserObj = newUser.ops[0];
+
+    // Add userId to userQueue
+    userQueue.add({ userId: newUserObj._id });
     return res.status(201).json({ id: newUserObj._id, email: newUserObj.email });
   }
 

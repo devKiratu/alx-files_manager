@@ -1,19 +1,23 @@
+/* eslint-disable consistent-return */
 import imageThumbnail from 'image-thumbnail';
 import fs from 'fs';
-import { fileQueue } from './controllers/FilesController';
+import Queue from 'bull/lib/queue';
 import dbClient from './utils/db';
+
+const fileQueue = new Queue('fileQueue');
+const userQueue = new Queue('userQueue');
 
 fileQueue.process(async (job, done) => {
   const { userId, fileId } = job.data;
   if (!fileId) {
-    done(new Error('Missing fileId'));
+    return done(new Error('Missing fileId'));
   }
   if (!userId) {
-    done(new Error('Missing userId'));
+    return done(new Error('Missing userId'));
   }
   const file = await dbClient.getFile(fileId, userId);
   if (!file) {
-    done(new Error('File not found'));
+    return done(new Error('File not found'));
   }
   const thumbnailWidths = [500, 250, 100];
   thumbnailWidths.forEach(async (width) => {
@@ -27,8 +31,21 @@ fileQueue.process(async (job, done) => {
         }
       });
     } catch (error) {
-      done(new Error(error));
+      return done(new Error(error));
     }
   });
-  done();
+  return done();
+});
+
+userQueue.process(async (job, done) => {
+  const { userId } = job.data;
+  if (!userId) {
+    return done(new Error('Missing userId'));
+  }
+  const user = await dbClient.getUserById(userId);
+  if (!user) {
+    return done(new Error('User not found'));
+  }
+  console.log(`Welcome ${user.email}`);
+  return done();
 });
