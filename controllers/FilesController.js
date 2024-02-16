@@ -83,9 +83,12 @@ class FilesController {
     const {
       userId: usrId, name, type, parentId, isPublic, _id,
     } = result.ops[0];
+
+    // Add file to job queue if its type is image
     if (type === 'image') {
       fileQueue.add({ userId, fileId: _id });
     }
+
     return res.status(201).json({
       id: _id, userId: usrId, name, type, isPublic, parentId,
     });
