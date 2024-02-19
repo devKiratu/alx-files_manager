@@ -8,8 +8,9 @@ describe( 'api endpoints tests', () => {
   let user;
   let email;
   let password;
+  let token;
 
-  before( () => {
+  before( (done) => {
     email = `${ generateRandomStr() }@gmail.com`;
     password = generateRandomStr()
     const userDetails = {
@@ -25,9 +26,10 @@ describe( 'api endpoints tests', () => {
       if ( !err ) {
         user = body;
       }
-    } )
+      done()
+    } );
     
-  })
+  } )
 
   describe( 'GET /status', () => {
     it( 'should return status code 200 when server is running', ( done ) => {
@@ -146,13 +148,421 @@ describe( 'api endpoints tests', () => {
         done();
       })
     })
+  } )
+  
+  describe( 'GET /disconnect', () => {
+    before( ( done ) => {
+      //log in user
+      const registeredUser = `${ email }:${ password }`;
+      const encodedStr = Buffer.from( registeredUser ).toString( 'base64' );
+      request( `${ baseUrl }/connect`,
+        { headers: { 'Authorization': `Basic ${ encodedStr }` } },
+        ( err, res, body ) => {
+          if ( !err ) {
+            token = JSON.parse( body );
+          }
+          done()
+        } )
+    } );
+
+    it( 'should return error for unregistered user', ( done ) => {
+      request( `${ baseUrl }/disconnect`,
+        { headers: { 'X-Token': 'dummy-token' } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 401 )
+          expect( JSON.parse( body ) ).to.deep.equal( { error: "Unauthorized" } )
+          done();
+        } )
+    } );
+
+    it( 'should return correct status code on successful disconnect', ( done ) => {
+      request( `${ baseUrl }/disconnect`,
+        { headers: { 'X-Token': `${ token.token }` } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 204 )
+          done();
+        } );
+    } );
+  } )
+  
+  describe( 'GET /users/me', () => {
+    before( ( done ) => {
+      //log in user
+      const registeredUser = `${ email }:${ password }`;
+      const encodedStr = Buffer.from( registeredUser ).toString( 'base64' );
+      request( `${ baseUrl }/connect`,
+        { headers: { 'Authorization': `Basic ${ encodedStr }` } },
+        ( err, res, body ) => {
+          if ( !err ) {
+            token = JSON.parse( body );
+          }
+          done()
+        } )
+    } );
+
+    it( 'should return error when wrong token is used', ( done ) => {
+      request( `${ baseUrl }/users/me`,
+        { headers: { 'X-Token': 'dummy-token' } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 401 )
+          expect( JSON.parse( body ) ).to.deep.equal( { error: "Unauthorized" } )
+          done();
+        } )
+    } );
+
+    it( 'should return user payload for valid token', ( done ) => {
+      request( `${ baseUrl }/users/me`,
+        { headers: { 'X-Token': `${ token.token }` } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 200 )
+          expect( JSON.parse( body ) ).to.include.keys( [ 'id', 'email' ] )
+          expect( JSON.parse( body ).email ).to.equal( email )
+          done();
+        } );
+    } );  
+  } )
+  
+  describe( 'POST /files', () => {
+    before( ( done ) => {
+      //log in user
+      const registeredUser = `${ email }:${ password }`;
+      const encodedStr = Buffer.from( registeredUser ).toString( 'base64' );
+      request( `${ baseUrl }/connect`,
+        { headers: { 'Authorization': `Basic ${ encodedStr }` } },
+        ( err, res, body ) => {
+          if ( !err ) {
+            token = JSON.parse( body );
+          }
+          done()
+        } )
+    } );
+
+    it( 'should reject an upload from an unauthorized user', ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "file", data: "SGVsbG8gV2Vic3RhY2shCg==" }
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': 'dummy token',
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        expect(res.statusCode).to.equal(401)
+        expect(body).to.deep.equal({ error: 'Unauthorized' })
+        done();
+      } )      
+    })
+    it( 'should return error: "Missing name" if file name is missing', ( done ) => {
+      const fileDetails = { naming: "myText.txt", type: "file", data: "SGVsbG8gV2Vic3RhY2shCg==" }
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${token.token}`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        expect(res.statusCode).to.equal(400)
+        expect(body).to.deep.equal({ error: 'Missing name' })
+        done();
+      } )      
+    } )
+
+    it( 'should return error "Missing type" if file type is not one of (image, file, folder)', ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "", data: "SGVsbG8gV2Vic3RhY2shCg==" }
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${token.token}`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        expect(res.statusCode).to.equal(400)
+        expect(body).to.deep.equal({ error: 'Missing type' })
+        done();
+      } )      
+    } )
+
+    it( 'should return error "Missing data" if data is not present and type is not folder', ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "file", }
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${ token.token }`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 400 )
+        expect( body ).to.deep.equal( { error: 'Missing data' } )
+        done();
+      } );
+    } );
+
+    it( 'should return a file payload on successful file upload', ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "file", data: "SGVsbG8gV2Vic3RhY2shCg=="}
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${ token.token }`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 201 )
+        expect( body ).to.include.keys(['id', 'userId', 'name', 'type', 'isPublic', 'parentId'])
+        done();
+      } );      
+    })
+
+  } );
+
+  describe( 'GET /files/:id', () => {
+    let fileId;
+    before( ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "file", data: "SGVsbG8gV2Vic3RhY2shCg=="}
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${ token.token }`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        if ( !err ) {
+          fileId = body.id
+        }
+        done();
+      } );   
+    })
+
+    it( 'should return error if invalid token is used', ( done ) => {
+      request( `${ baseUrl }/files/${ fileId }`,
+        { headers: { 'X-Token': 'dummy-token' } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 401 )
+          expect( JSON.parse( body ) ).to.deep.equal( { error: "Unauthorized" } )
+          done();
+        } );
+    } );
+
+    it( 'should return error Not Found if fileId is not valid', ( done ) => {
+      request( `${ baseUrl }/files/123456789123`,
+        { headers: { 'X-Token': `${ token.token }` } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 404 )
+          expect( JSON.parse( body ) ).to.deep.equal( { error: 'Not found' } )
+          done();
+        } );
+    } );
+
+    it( 'should return file payload for valid token and fileId', (done) => {
+      request( `${ baseUrl }/files/${fileId}`,
+        { headers: { 'X-Token': `${ token.token }` } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 200 )
+          expect( JSON.parse(body) ).to.include.keys(['id', 'userId', 'name', 'type', 'isPublic', 'parentId'])
+          done();
+        } );      
+    })
+  } )
+  
+  describe( 'GET /files', () => {
+    it( 'should return error if invalid token is used', ( done ) => {
+      request( `${ baseUrl }/files`,
+        { headers: { 'X-Token': 'dummy-token' } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 401 )
+          expect( JSON.parse( body ) ).to.deep.equal( { error: "Unauthorized" } )
+          done();
+        } );    
+    } );
+
+    it( 'should return an array of files when valid token is used', ( done ) => {
+      request( `${ baseUrl }/files`,
+        { headers: { 'X-Token': `${token.token}`} },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 200 );
+          expect(JSON.parse(body)).to.be.an.instanceOf(Array)
+          done();
+        } );      
+    })
+  } )
+  
+  describe( 'PUT /files/:id/publish', () => {
+    let fileId;
+    before( ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "file", data: "SGVsbG8gV2Vic3RhY2shCg=="}
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${ token.token }`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        if ( !err ) {
+          fileId = body.id
+        }
+        done();
+      } );   
+    })
+
+    it( 'should return error if invalid token is used', ( done ) => {
+      request( {
+        method: 'PUT',
+        url: `${ baseUrl }/files/${fileId}/publish`,
+        headers: {
+          'X-Token': `dummy token`,
+        },
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 401 )
+        expect( JSON.parse( body ) ).to.deep.equal( { error: "Unauthorized" } )
+        done();  
+      } ); 
+    } );
+
+    it( 'should return error Not Found if fileId is not valid', ( done ) => {
+      request( {
+        method: 'PUT',
+        url: `${ baseUrl }/files/${fileId}dummy/publish`,
+        headers: {
+          'X-Token': `${token.token}`,
+        },
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 404 )
+        expect( JSON.parse( body ) ).to.deep.equal( { error: 'Not found' } )
+        done();  
+      } ); 
+    } );
+
+    it( 'should set file attribute "isPublic" to true', ( done ) => {
+      request( {
+        method: 'PUT',
+        url: `${ baseUrl }/files/${fileId}/publish`,
+        headers: {
+          'X-Token': `${token.token}`,
+        },
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 200 )
+        expect(JSON.parse(body).isPublic).to.be.true
+        done();  
+      } ); 
+    } );
+  } );
+  
+  describe( 'PUT /files/:id/unpublish', () => {
+    let fileId;
+    before( ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "file", data: "SGVsbG8gV2Vic3RhY2shCg==", isPublic: true }
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${ token.token }`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        if ( !err ) {
+          fileId = body.id
+        }
+        done();
+      } );
+    } );
+
+    it( 'should return error if invalid token is used', ( done ) => {
+      request( {
+        method: 'PUT',
+        url: `${ baseUrl }/files/${fileId}/unpublish`,
+        headers: {
+          'X-Token': `dummy token`,
+        },
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 401 )
+        expect( JSON.parse( body ) ).to.deep.equal( { error: "Unauthorized" } )
+        done();  
+      } ); 
+    } );
+
+    it( 'should return error Not Found if fileId is not valid', ( done ) => {
+      request( {
+        method: 'PUT',
+        url: `${ baseUrl }/files/${fileId}dummy/unpublish`,
+        headers: {
+          'X-Token': `${token.token}`,
+        },
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 404 )
+        expect( JSON.parse( body ) ).to.deep.equal( { error: 'Not found' } )
+        done();  
+      } ); 
+    } );
+
+    it( 'should set file attribute "isPublic" to false', ( done ) => {
+      request( {
+        method: 'PUT',
+        url: `${ baseUrl }/files/${fileId}/unpublish`,
+        headers: {
+          'X-Token': `${token.token}`,
+        },
+      }, ( err, res, body ) => {
+        expect( res.statusCode ).to.equal( 200 )
+        expect(JSON.parse(body).isPublic).to.be.false
+        done();  
+      } ); 
+    } );
+
+  } )
+  
+  describe( 'GET /files/:id/data', () => {
+    let fileId;
+    const data = "Hello from api tests!"
+    const fileData = Buffer.from( data ).toString( 'base64' );
+    before( ( done ) => {
+      const fileDetails = { name: "myText.txt", type: "file", data: fileData, isPublic: true }
+      request( {
+        method: 'POST',
+        url: `${ baseUrl }/files`,
+        headers: {
+          'X-Token': `${ token.token }`,
+        },
+        json: true,
+        body: fileDetails
+      }, ( err, res, body ) => {
+        if ( !err ) {
+          fileId = body.id
+        }
+        done();
+      } );
+    } );
+    
+    it( 'should return error Not Found if fileId is invalid', ( done ) => {
+      request( `${ baseUrl }/files/${ fileId }dummy/data`,
+        { headers: { 'X-Token': `${ token.token }` } },
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 404 )
+          expect( JSON.parse( body ) ).to.deep.equal( { error: 'Not found' } )
+          done();
+        } );
+    } );
+
+    it( 'should return file content for a valid fileId of a published file', ( done ) => {
+      request( `${ baseUrl }/files/${ fileId }/data`,
+        ( err, res, body ) => {
+          expect( res.statusCode ).to.equal( 200 )
+          expect(body).to.equal(data)
+          done();
+        } );
+    })
+
   })
-  describe('GET /disconnect', () =>{})
-  describe('GET /users/me', () =>{})
-  describe('POST /files', () =>{})
-  describe('GET /files/:id', () =>{})
-  describe('GET /files', () =>{})//pagination
-  describe('PUT /files/:id/publish', () =>{})
-  describe('PUT /files/:id/unpublish', () =>{})
-  describe('GET /files/:id/data', () =>{})
 })

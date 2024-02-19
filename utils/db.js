@@ -97,25 +97,33 @@ class DBClient {
   }
 
   async publishFile(fileId, userId) {
-    const db = this._mongoClient.db(this._dbName);
-    const filesCollection = db.collection('files');
-    const updatedDocument = await filesCollection.findOneAndUpdate(
-      { _id: new ObjectID(fileId), userId: new ObjectID(userId) },
-      { $set: { isPublic: true } },
-      { returnOriginal: false },
-    );
-    return updatedDocument.value;
+    try {
+      const db = this._mongoClient.db(this._dbName);
+      const filesCollection = db.collection('files');
+      const updatedDocument = await filesCollection.findOneAndUpdate(
+        { _id: new ObjectID(fileId), userId: new ObjectID(userId) },
+        { $set: { isPublic: true } },
+        { returnOriginal: false },
+      );
+      return updatedDocument.value;
+    } catch (error) {
+      return null;
+    }
   }
 
   async unpublishFile(fileId, userId) {
-    const db = this._mongoClient.db(this._dbName);
-    const filesCollection = db.collection('files');
-    const updatedDocument = await filesCollection.findOneAndUpdate(
-      { _id: new ObjectID(fileId), userId: new ObjectID(userId) },
-      { $set: { isPublic: false } },
-      { returnOriginal: false },
-    );
-    return updatedDocument.value;
+    try {
+      const db = this._mongoClient.db(this._dbName);
+      const filesCollection = db.collection('files');
+      const updatedDocument = await filesCollection.findOneAndUpdate(
+        { _id: new ObjectID(fileId), userId: new ObjectID(userId) },
+        { $set: { isPublic: false } },
+        { returnOriginal: false },
+      );
+      return updatedDocument.value;
+    } catch (error) {
+      return null;
+    }
   }
 }
 
